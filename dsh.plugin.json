@@ -1,0 +1,13 @@
+{
+  "id": "dsh-usage-dashboard",
+  "version": "0.1.0",
+  "main": "lib/index.js",
+  "description": "Real-time usage dashboard aggregating DSH's own token/stat projections (settings > 用量统计).",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  }
+}
