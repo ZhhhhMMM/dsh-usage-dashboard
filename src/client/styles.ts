@@ -14,8 +14,8 @@ const css = `
 .dsh_usage_cardValue{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.2}
 .dsh_usage_cardSub{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh_usage_trendCard{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
-.dsh_usage_trend{width:100%;height:auto;display:block}
-.dsh_usage_line{width:100%;height:auto;display:block}
+.dsh_usage_trend{width:100%;height:190px;display:block}
+.dsh_usage_line{width:100%;height:190px;display:block}
 .dsh_usage_lineGrid{stroke:var(--dsw-alias-border-l1);stroke-width:1;stroke-dasharray:3 3}
 .dsh_usage_lineArea{fill:var(--dsw-alias-state-business-primary);opacity:.08}
 .dsh_usage_linePath{stroke:var(--dsw-alias-state-business-primary);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
@@ -63,7 +63,7 @@ const css = `
 .dsh_usage_legend{display:flex;flex-wrap:wrap;gap:14px}
 .dsh_usage_legendItem{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dsh_usage_legendDot{width:10px;height:10px;border-radius:3px;flex:none}
-.dsh_usage_chartRow{display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:stretch}
+.dsh_usage_chartRow{display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start}
 .dsh_usage_chartCol{min-width:0;display:flex;flex-direction:column;gap:8px}
 .dsh_usage_chartColDonut{justify-content:center}
 .dsh_usage_chartTitle{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:600;margin-bottom:4px}
