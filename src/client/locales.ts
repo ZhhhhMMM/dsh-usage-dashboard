@@ -56,6 +56,8 @@ export type UsageDashboardKey =
   | 'legendCacheRead'
   | 'legendCacheWrite'
   | 'totalTokensTitle'
+  | 'composition'
+  | 'trend'
 
 export const zh = {
   nav: '用量统计',
@@ -108,6 +110,8 @@ export const zh = {
   legendCacheRead: '缓存命中',
   legendCacheWrite: '缓存写入',
   totalTokensTitle: '总 Token',
+  composition: 'Token 类型占比',
+  trend: '用量趋势',
 }
 
 export const en = {
@@ -161,6 +165,8 @@ export const en = {
   legendCacheRead: 'Cache read',
   legendCacheWrite: 'Cache write',
   totalTokensTitle: 'Total tokens',
+  composition: 'Token composition',
+  trend: 'Usage trend',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

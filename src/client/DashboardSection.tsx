@@ -1,13 +1,10 @@
 /**
  * The settings 用量统计 (usage) section, with a full-screen mode.
  *
- * In the settings modal it renders as a compact pane; a "全屏" toggle in the
- * header puts the whole dashboard into a fixed full-viewport overlay (rendered
- * through a portal so it escapes the settings modal's clipping), with a "退出
- * 全屏" button. The real-time aggregation, summary cards, account balance, a
- * multi-series daily trend chart (uncached input / cache read / cache write /
- * output, with a 近7日/近30日 range toggle and legend), and the expandable
- * per-session table all render at any size.
+ * Charts: a stacked multi-series daily bar (uncached input / cache read /
+ * cache write / output), a donut composition of the same four token types
+ * (proportion of token usage), and a total-token trend line over the range.
+ * All are inline SVG (no external chart lib), scoped under .dsh_usage_*.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -23,6 +20,15 @@ export interface DashboardInjected {
 
 /** Full section props: runtime share + injected face + the locale seat. */
 export type DashboardSectionProps = PropsRuntime<'settings.section'> & InjectFace<DashboardInjected> & PropsLocale<'usage-dashboard'>
+
+/** The four token-type series the charts share. */
+type SeriesKey = 'uncached' | 'cacheRead' | 'cacheWrite' | 'output'
+const SERIES: Array<{ key: SeriesKey; color: string; label: UsageDashboardKey }> = [
+  { key: 'uncached', color: '#3964fe', label: 'legendInput' },
+  { key: 'cacheRead', color: '#22c55e', label: 'legendCacheRead' },
+  { key: 'cacheWrite', color: '#f59e0b', label: 'legendCacheWrite' },
+  { key: 'output', color: '#8b5cf6', label: 'legendOutput' },
+]
 
 /** Format an integer with thousands separators. */
 function intfmt(n: number): string {
@@ -81,58 +87,134 @@ function BalanceCard(props: { balance: BalanceView; loading: boolean; onRefresh:
   )
 }
 
-/** A multi-series stacked area chart over the daily buckets. */
-function MultiTrend(props: { data: DailyPoint[]; series: Array<{ key: 'uncached' | 'cacheRead' | 'cacheWrite' | 'output'; color: string }> }): JSX.Element {
-  const { data, series } = props
+/** A multi-series stacked bar chart over the daily buckets. */
+function MultiTrend(props: { data: DailyPoint[] }): JSX.Element {
+  const { data } = props
   const n = data.length
   if (n === 0) return <div className="dsh_usage_empty">—</div>
-  const chartW = 900
-  const barW = Math.max(8, Math.min(40, (chartW / n) * 0.6))
+  const chartW = 1000
+  const chartH = 190
+  const barW = Math.max(8, Math.min(44, (chartW / n) * 0.6))
   const gap = (chartW - n * barW) / Math.max(1, n - 1)
-  const max = Math.max(1, ...data.map((d) => series.reduce((s, sr) => s + d[sr.key], 0)))
-  const seriesColors = ['#3964fe', '#22c55e', '#f59e0b', '#8b5cf6']
-
+  const max = Math.max(1, ...data.map((d) => d.uncached + d.cacheRead + d.cacheWrite + d.output))
+  const plotH = 150
+  const baseY = chartH - 24
   return (
-    <svg className="dsh_usage_trend" viewBox={`0 0 ${chartW} 160`} role="img" aria-label="usage trend">
+    <svg className="dsh_usage_trend" viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label="usage trend">
       {data.map((d, i) => {
         const x = i * (barW + gap)
-        // Stack the buckets bottom-up.
         let acc = 0
         return (
           <g key={d.label}>
-            {series.map((sr, si) => {
-              const h = (d[sr.key] / max) * 128
-              const y = 136 - acc - h
+            {SERIES.map((sr) => {
+              const h = (d[sr.key] / max) * plotH
+              const y = baseY - acc - h
               acc += h
               return h > 0 ? (
-                <rect key={sr.key} className="dsh_usage_trendBar" x={x} y={y} width={barW} height={Math.max(1, h)} rx={1.5} fill={seriesColors[si % seriesColors.length]} />
+                <rect key={sr.key} className="dsh_usage_trendBar" x={x} y={y} width={barW} height={Math.max(1, h)} rx={1.5} fill={sr.color} style={{ opacity: 0.92 }} />
               ) : null
             })}
-            <text className="dsh_usage_trendLabel" x={x + barW / 2} y={150} textAnchor="middle">{d.label}</text>
-            <title>{`${d.label}: ${intfmt(series.reduce((s, sr) => s + d[sr.key], 0))}`}</title>
+            <text className="dsh_usage_trendLabel" x={x + barW / 2} y={chartH - 8} textAnchor="middle">{d.label}</text>
+            <title>{`${d.label}: ${intfmt(d.uncached + d.cacheRead + d.cacheWrite + d.output)}`}</title>
           </g>
         )
       })}
-      <line className="dsh_usage_trendAxis" x1="0" y1="136" x2={chartW} y2="136" />
+      <line className="dsh_usage_trendAxis" x1="0" y1={baseY} x2={chartW} y2={baseY} />
     </svg>
   )
 }
 
-/** A tiny legend for the multi-series chart. */
+/** A donut chart of the token-type composition (proportion of token usage). */
+function DonutChart(props: { segments: Array<{ key: SeriesKey; value: number; color: string; label: UsageDashboardKey }>; center: string; centerLabel: string; t: (k: UsageDashboardKey) => string }): JSX.Element {
+  const { segments, center, centerLabel, t } = props
+  const total = segments.reduce((s, x) => s + x.value, 0)
+  if (total <= 0) return <div className="dsh_usage_empty">—</div>
+  const cx = 74
+  const cy = 74
+  const r = 56
+  const strokeW = 24
+  const C = 2 * Math.PI * r
+  let offset = 0
+  return (
+    <div className="dsh_usage_donutWrap">
+      <svg className="dsh_usage_donut" viewBox="0 0 148 148" role="img" aria-label="composition">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--dsw-alias-bg-layer-1)" strokeWidth={strokeW} />
+        {segments.map((s) => {
+          const dash = (s.value / total) * C
+          const el = (
+            <circle key={s.key} cx={cx} cy={cy} r={r} fill="none"
+              stroke={s.color} strokeWidth={strokeW}
+              strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-offset}
+              transform={`rotate(-90 ${cx} ${cy})`}>
+              <title>{`${t(s.label)}: ${intfmt(s.value)}`}</title>
+            </circle>
+          )
+          offset += dash
+          return el
+        })}
+        <text className="dsh_usage_donutVal" x={cx} y={cy - 2} textAnchor="middle">{center}</text>
+        <text className="dsh_usage_donutLabel" x={cx} y={cy + 16} textAnchor="middle">{centerLabel}</text>
+      </svg>
+      <div className="dsh_usage_donutLegend">
+        {segments.map((s) => (
+          <div key={s.key} className="dsh_usage_donutLegendItem">
+            <span className="dsh_usage_donutDot" style={{ background: s.color }} />
+            <span className="dsh_usage_donutLegendLabel">{t(s.label)}</span>
+            <span className="dsh_usage_donutLegendVal">{((s.value / total) * 100).toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** A single-line total-token trend chart over the daily buckets. */
+function LineTrend(props: { data: DailyPoint[] }): JSX.Element {
+  const { data } = props
+  const n = data.length
+  if (n === 0) return <div className="dsh_usage_empty">—</div>
+  const chartW = 1000
+  const chartH = 190
+  const padL = 46
+  const padR = 16
+  const padT = 16
+  const padB = 26
+  const max = Math.max(1, ...data.map((d) => d.uncached + d.cacheRead + d.cacheWrite + d.output))
+  const stepX = (chartW - padL - padR) / Math.max(1, n - 1)
+  const px = (i: number): number => padL + i * stepX
+  const py = (v: number): number => chartH - padB - (v / max) * (chartH - padT - padB)
+  const vals = data.map((d) => d.uncached + d.cacheRead + d.cacheWrite + d.output)
+  const linePts = vals.map((v, i) => `${px(i)},${py(v)}`)
+  return (
+    <svg className="dsh_usage_line" viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label="usage trend line">
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => {
+        const gy = chartH - padB - f * (chartH - padT - padB)
+        return <line key={f} className="dsh_usage_lineGrid" x1={padL} y1={gy} x2={chartW - padR} y2={gy} />
+      })}
+      <polygon className="dsh_usage_lineArea" points={`${padL},${chartH - padB} ${linePts.join(' ')} ${chartW - padR},${chartH - padB}`} />
+      <polyline className="dsh_usage_linePath" points={linePts.join(' ')} fill="none" />
+      {vals.map((v, i) => (
+        <g key={i}>
+          <circle className="dsh_usage_lineDot" cx={px(i)} cy={py(v)} r="3.5" />
+          <title>{`${data[i].label}: ${intfmt(v)}`}</title>
+        </g>
+      ))}
+      {data.map((d, i) => (
+        <text key={d.label} className="dsh_usage_trendLabel" x={px(i)} y={chartH - 8} textAnchor="middle">{d.label}</text>
+      ))}
+    </svg>
+  )
+}
+
+/** A tiny legend for the multi-series bar chart. */
 function Legend(props: { t: (k: UsageDashboardKey) => string }): JSX.Element {
   const { t } = props
-  const items: Array<{ key: UsageDashboardKey; color: string }> = [
-    { key: 'legendInput', color: '#3964fe' },
-    { key: 'legendCacheRead', color: '#22c55e' },
-    { key: 'legendCacheWrite', color: '#f59e0b' },
-    { key: 'legendOutput', color: '#8b5cf6' },
-  ]
   return (
     <div className="dsh_usage_legend">
-      {items.map((it) => (
+      {SERIES.map((it) => (
         <span className="dsh_usage_legendItem" key={it.key}>
           <span className="dsh_usage_legendDot" style={{ background: it.color }} />
-          {t(it.key)}
+          {t(it.label)}
         </span>
       ))}
     </div>
@@ -180,7 +262,6 @@ function FragmentedRow(props: { children: React.ReactNode }): JSX.Element {
 
 /**
  * The dashboard body shared by both the settings-pane and full-screen views.
- * @param props - the common props + view-state hooks.
  */
 function DashboardBody(props: {
   dashboard: UsageDashboard
@@ -197,12 +278,11 @@ function DashboardBody(props: {
   const tool = msfmt(d.time.toolMs)
   const ttft = d.counts.steps > 0 && d.time.ttftMs > 0 ? msfmt(d.time.ttftMs / Math.max(1, d.counts.steps)) : '—'
   const decode = d.time.decodeMs > 0 ? msfmt(d.time.decodeMs) : '—'
-  const series: Array<{ key: 'uncached' | 'cacheRead' | 'cacheWrite' | 'output'; color: string }> = [
-    { key: 'uncached', color: '#3964fe' },
-    { key: 'cacheRead', color: '#22c55e' },
-    { key: 'cacheWrite', color: '#f59e0b' },
-    { key: 'output', color: '#8b5cf6' },
-  ]
+  const data = dailySeries(d.rows, range)
+
+  const donutSegments = SERIES
+    .map((sr) => ({ key: sr.key, value: d.totals[sr.key === 'uncached' ? 'uncachedInput' : sr.key], color: sr.color, label: sr.label }))
+    .filter((s) => s.value > 0)
 
   const [expanded, setExpanded] = useState<string | null>(null)
   const toggle = (id: string): void => setExpanded((cur) => (cur === id ? null : id))
@@ -229,8 +309,20 @@ function DashboardBody(props: {
             <button type="button" className={`dsh_usage_rangeBtn ${range === 30 ? 'dsh_usage_rangeBtnActive' : ''}`} onClick={() => { setRange(30) }}>{t('days30')}</button>
           </div>
         </div>
-        <MultiTrend data={dailySeries(d.rows, range)} series={series} />
-        <Legend t={t} />
+
+        <div className="dsh_usage_chartRow">
+          <div className="dsh_usage_chartCol dsh_usage_chartColTrend">
+            <MultiTrend data={data} />
+            <Legend t={t} />
+          </div>
+          <div className="dsh_usage_chartCol dsh_usage_chartColDonut">
+            <div className="dsh_usage_chartTitle">{t('composition')}</div>
+            <DonutChart segments={donutSegments} center={unit(d.totals.total)} centerLabel={t('totalTokens')} t={t} />
+          </div>
+        </div>
+
+        <div className="dsh_usage_chartTitle">{t('trend')}</div>
+        <LineTrend data={data} />
       </div>
 
       <div className="dsh_usage_tableWrap">
