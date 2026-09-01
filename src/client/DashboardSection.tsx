@@ -6,7 +6,7 @@
  * (proportion of token usage), and a total-token trend line over the range.
  * All are inline SVG (no external chart lib), scoped under .dsh_usage_*.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PropsLocale, PropsRuntime, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionsListFace } from './index.ts'
@@ -206,10 +206,12 @@ function smoothPath(pts: Array<{ x: number; y: number }>): string {
   return d
 }
 
-/** A smooth total-token trend line over the daily buckets (gradient fill + draw-on + last-point pulse). */
+/** A minimalist smooth total-token trend line (gradient stroke + hover tooltip + last-point pulse). */
 function LineTrend(props: { data: DailyPoint[] }): JSX.Element {
   const { data } = props
   const n = data.length
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [hover, setHover] = useState<number | null>(null)
   if (n === 0) return <div className="dsh_usage_empty">—</div>
   const chartW = 1000
   const chartH = 190
@@ -226,34 +228,57 @@ function LineTrend(props: { data: DailyPoint[] }): JSX.Element {
   const line = smoothPath(pts)
   const area = `${line} L${px(n - 1)},${chartH - padB} L${px(0)},${chartH - padB} Z`
   const lastIdx = n - 1
+  const labelStep = n > 10 ? Math.ceil(n / 6) : 1
+  const onMove = (e: React.MouseEvent<SVGSVGElement>): void => {
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * chartW
+    let best = 0
+    let bestD = Infinity
+    for (let i = 0; i < n; i++) { const dd = Math.abs(px(i) - x); if (dd < bestD) { bestD = dd; best = i } }
+    setHover(best)
+  }
+  const onLeave = (): void => setHover(null)
+  const hI = hover === null ? null : Math.min(hover, n - 1)
+  const hX = hI === null ? 0 : px(hI)
+  const hY = hI === null ? 0 : py(vals[hI])
   return (
-    <svg className="dsh_usage_line" viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label="usage trend line">
+    <svg ref={svgRef} className="dsh_usage_line" viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label="usage trend line" onMouseMove={onMove} onMouseLeave={onLeave}>
       <defs>
+        <linearGradient id="dsh_usage_lineStroke" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#3964fe" />
+          <stop offset="100%" stopColor="#7c5cff" />
+        </linearGradient>
         <linearGradient id="dsh_usage_areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--dsw-alias-state-business-primary)" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="var(--dsw-alias-state-business-primary)" stopOpacity="0" />
+          <stop offset="0%" stopColor="#3964fe" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#3964fe" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {[0, 0.25, 0.5, 0.75, 1].map((f) => {
+      {[0.25, 0.5, 0.75].map((f) => {
         const gy = chartH - padB - f * (chartH - padT - padB)
         return <line key={f} className="dsh_usage_lineGrid" x1={padL} y1={gy} x2={chartW - padR} y2={gy} />
       })}
       <path className="dsh_usage_lineArea" d={area} />
       <path className="dsh_usage_linePath" d={line} pathLength={1} />
-      {pts.map((p, i) => (i < lastIdx ? (
-        <g key={i}>
-          <circle className="dsh_usage_lineDot" cx={p.x} cy={p.y} r="2.6" />
-          <title>{`${data[i].label}: ${intfmt(vals[i])}`}</title>
+      {hI !== null ? (
+        <g>
+          <line className="dsh_usage_cursor" x1={hX} y1={padT} x2={hX} y2={chartH - padB} />
+          <circle className="dsh_usage_hoverDot" cx={hX} cy={hY} r="5.5" />
+          <g className="dsh_usage_tipBox" transform={`translate(${Math.min(Math.max(hX - 54, 4), chartW - 112)},${Math.max(4, hY - 52)})`}>
+            <rect width="108" height="42" rx="7" className="dsh_usage_tipRect" />
+            <text className="dsh_usage_tipLabel" x="10" y="17">{data[hI].label}</text>
+            <text className="dsh_usage_tipValue" x="10" y="34">{intfmt(vals[hI])}</text>
+          </g>
         </g>
-      ) : null))}
+      ) : null}
       <g>
         <circle className="dsh_usage_lineDotHalo" cx={pts[lastIdx].x} cy={pts[lastIdx].y} r="12" />
-        <circle className="dsh_usage_lineDot dsh_usage_lineDotLast" cx={pts[lastIdx].x} cy={pts[lastIdx].y} r="4.5" />
-        <title>{`${data[lastIdx].label}: ${intfmt(vals[lastIdx])}`}</title>
+        <circle className="dsh_usage_lineDotLast" cx={pts[lastIdx].x} cy={pts[lastIdx].y} r="4.5" />
       </g>
-      {data.map((d, i) => (
+      {data.map((d, i) => (i % labelStep === 0 ? (
         <text key={d.label} className="dsh_usage_trendLabel" x={px(i)} y={chartH - 8} textAnchor="middle">{d.label}</text>
-      ))}
+      ) : null))}
     </svg>
   )
 }

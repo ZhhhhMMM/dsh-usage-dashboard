@@ -38,12 +38,16 @@ const css = `
 .dsh_usage_trendCard{background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 82%,transparent);border:1px solid var(--dsw-alias-border-l1);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(10px)}
 .dsh_usage_trend{width:100%;height:190px;display:block}
 .dsh_usage_line{width:100%;height:190px;display:block}
-.dsh_usage_lineGrid{stroke:var(--dsw-alias-border-l1);stroke-width:1;stroke-dasharray:3 3}
+.dsh_usage_lineGrid{stroke:var(--dsw-alias-border-l1);stroke-width:1;stroke-dasharray:2 4;opacity:.55}
 .dsh_usage_lineArea{fill:url(#dsh_usage_areaGrad)}
-.dsh_usage_linePath{stroke:var(--dsw-alias-state-business-primary);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 3px 6px rgba(57,100,254,.35));stroke-dasharray:1;stroke-dashoffset:1;animation:dsh_usage_dash 1.1s ease-out forwards}
-.dsh_usage_lineDot{fill:var(--dsw-alias-state-business-primary)}
-.dsh_usage_lineDotLast{stroke:var(--dsw-alias-bg-base);stroke-width:2}
-.dsh_usage_lineDotHalo{fill:var(--dsw-alias-state-business-primary);opacity:.22;transform-box:fill-box;transform-origin:center;animation:dsh_usage_pulse 2.2s ease-in-out infinite}
+.dsh_usage_linePath{stroke:url(#dsh_usage_lineStroke);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:dsh_usage_dash 1.1s ease-out forwards}
+.dsh_usage_lineDotLast{fill:var(--dsw-alias-bg-base);stroke:url(#dsh_usage_lineStroke);stroke-width:2.5}
+.dsh_usage_lineDotHalo{fill:url(#dsh_usage_lineStroke);opacity:.25;transform-box:fill-box;transform-origin:center;animation:dsh_usage_pulse 2.2s ease-in-out infinite}
+.dsh_usage_cursor{stroke:var(--dsw-alias-border-l1);stroke-width:1;stroke-dasharray:3 3}
+.dsh_usage_hoverDot{fill:var(--dsw-alias-bg-base);stroke:url(#dsh_usage_lineStroke);stroke-width:2.5}
+.dsh_usage_tipRect{fill:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 94%,transparent);stroke:var(--dsw-alias-border-l1)}
+.dsh_usage_tipLabel{fill:var(--dsw-alias-label-tertiary);font-size:11px}
+.dsh_usage_tipValue{fill:var(--dsw-alias-label-primary);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
 @keyframes dsh_usage_dash{to{stroke-dashoffset:0}}
 @keyframes dsh_usage_pulse{0%,100%{transform:scale(1);opacity:.22}50%{transform:scale(1.7);opacity:.04}}
 .dsh_usage_trendBar{opacity:.92;transition:opacity .15s ease}
