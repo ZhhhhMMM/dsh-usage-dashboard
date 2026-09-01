@@ -39,9 +39,13 @@ const css = `
 .dsh_usage_trend{width:100%;height:190px;display:block}
 .dsh_usage_line{width:100%;height:190px;display:block}
 .dsh_usage_lineGrid{stroke:var(--dsw-alias-border-l1);stroke-width:1;stroke-dasharray:3 3}
-.dsh_usage_lineArea{fill:var(--dsw-alias-state-business-primary);opacity:.12}
-.dsh_usage_linePath{stroke:var(--dsw-alias-state-business-primary);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 3px 6px rgba(57,100,254,.35))}
+.dsh_usage_lineArea{fill:url(#dsh_usage_areaGrad)}
+.dsh_usage_linePath{stroke:var(--dsw-alias-state-business-primary);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 3px 6px rgba(57,100,254,.35));stroke-dasharray:1;stroke-dashoffset:1;animation:dsh_usage_dash 1.1s ease-out forwards}
 .dsh_usage_lineDot{fill:var(--dsw-alias-state-business-primary)}
+.dsh_usage_lineDotLast{stroke:var(--dsw-alias-bg-base);stroke-width:2}
+.dsh_usage_lineDotHalo{fill:var(--dsw-alias-state-business-primary);opacity:.22;transform-box:fill-box;transform-origin:center;animation:dsh_usage_pulse 2.2s ease-in-out infinite}
+@keyframes dsh_usage_dash{to{stroke-dashoffset:0}}
+@keyframes dsh_usage_pulse{0%,100%{transform:scale(1);opacity:.22}50%{transform:scale(1.7);opacity:.04}}
 .dsh_usage_trendBar{opacity:.92;transition:opacity .15s ease}
 .dsh_usage_trendBar:hover{opacity:1;filter:brightness(1.08)}
 .dsh_usage_trendLabel{fill:var(--dsw-alias-label-tertiary);font-size:10px}
@@ -112,6 +116,20 @@ const css = `
 /* entrance motion (staggered via inline animation-delay) */
 .dsh_usage_in{animation:dsh_usage_in .5s cubic-bezier(.2,.7,.2,1) both}
 @keyframes dsh_usage_in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.dsh_usage_rankCard{background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 82%,transparent);border:1px solid var(--dsw-alias-border-l1);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(10px)}
+.dsh_usage_rankRow{display:flex;align-items:center;gap:12px;padding:4px 2px}
+.dsh_usage_rankRow:hover .dsh_usage_rankBar span{filter:brightness(1.12)}
+.dsh_usage_rankIdx{width:20px;text-align:center;font-weight:700;color:var(--dsw-alias-label-tertiary);font-size:12px;font-variant-numeric:tabular-nums;flex:none}
+.dsh_usage_rankDot{width:9px;height:9px;border-radius:50%;background:var(--dsw-alias-label-tertiary);flex:none;opacity:.55}
+.dsh_usage_rankDotLive{background:#22c55e;opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:dsh_usage_dot 1.8s ease-out infinite}
+@keyframes dsh_usage_dot{70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.dsh_usage_rankBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.dsh_usage_rankTitle{font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh_usage_rankBar{height:7px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.dsh_usage_rankBar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#3964fe,#7c5cff);transition:width .6s cubic-bezier(.2,.7,.2,1)}
+.dsh_usage_rankVal{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+.dsh_usage_rankMeta{font-size:11px;font-weight:400;color:var(--dsw-alias-label-tertiary)}
 
 @media(max-width:860px){.dsh_usage_chartRow{grid-template-columns:1fr}}
 `

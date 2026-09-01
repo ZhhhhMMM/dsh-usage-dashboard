@@ -187,7 +187,26 @@ function DonutChart(props: { segments: Array<{ key: SeriesKey; value: number; co
   )
 }
 
-/** A single-line total-token trend chart over the daily buckets. */
+/** Catmull-Rom → cubic Bézier path for a smooth curve through the points. */
+function smoothPath(pts: Array<{ x: number; y: number }>): string {
+  if (pts.length === 0) return ''
+  if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`
+  let d = `M${pts[0].x},${pts[0].y}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[Math.min(pts.length - 1, i + 2)]
+    const c1x = p1.x + (p2.x - p0.x) / 6
+    const c1y = p1.y + (p2.y - p0.y) / 6
+    const c2x = p2.x - (p3.x - p1.x) / 6
+    const c2y = p2.y - (p3.y - p1.y) / 6
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2.x},${p2.y}`
+  }
+  return d
+}
+
+/** A smooth total-token trend line over the daily buckets (gradient fill + draw-on + last-point pulse). */
 function LineTrend(props: { data: DailyPoint[] }): JSX.Element {
   const { data } = props
   const n = data.length
@@ -195,29 +214,43 @@ function LineTrend(props: { data: DailyPoint[] }): JSX.Element {
   const chartW = 1000
   const chartH = 190
   const padL = 46
-  const padR = 16
-  const padT = 16
+  const padR = 18
+  const padT = 18
   const padB = 26
   const max = Math.max(1, ...data.map((d) => d.uncached + d.cacheRead + d.cacheWrite + d.output))
   const stepX = (chartW - padL - padR) / Math.max(1, n - 1)
   const px = (i: number): number => padL + i * stepX
   const py = (v: number): number => chartH - padB - (v / max) * (chartH - padT - padB)
   const vals = data.map((d) => d.uncached + d.cacheRead + d.cacheWrite + d.output)
-  const linePts = vals.map((v, i) => `${px(i)},${py(v)}`)
+  const pts = vals.map((v, i) => ({ x: px(i), y: py(v) }))
+  const line = smoothPath(pts)
+  const area = `${line} L${px(n - 1)},${chartH - padB} L${px(0)},${chartH - padB} Z`
+  const lastIdx = n - 1
   return (
     <svg className="dsh_usage_line" viewBox={`0 0 ${chartW} ${chartH}`} role="img" aria-label="usage trend line">
+      <defs>
+        <linearGradient id="dsh_usage_areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--dsw-alias-state-business-primary)" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="var(--dsw-alias-state-business-primary)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
       {[0, 0.25, 0.5, 0.75, 1].map((f) => {
         const gy = chartH - padB - f * (chartH - padT - padB)
         return <line key={f} className="dsh_usage_lineGrid" x1={padL} y1={gy} x2={chartW - padR} y2={gy} />
       })}
-      <polygon className="dsh_usage_lineArea" points={`${padL},${chartH - padB} ${linePts.join(' ')} ${chartW - padR},${chartH - padB}`} />
-      <polyline className="dsh_usage_linePath" points={linePts.join(' ')} fill="none" />
-      {vals.map((v, i) => (
+      <path className="dsh_usage_lineArea" d={area} />
+      <path className="dsh_usage_linePath" d={line} pathLength={1} />
+      {pts.map((p, i) => (i < lastIdx ? (
         <g key={i}>
-          <circle className="dsh_usage_lineDot" cx={px(i)} cy={py(v)} r="3.5" />
-          <title>{`${data[i].label}: ${intfmt(v)}`}</title>
+          <circle className="dsh_usage_lineDot" cx={p.x} cy={p.y} r="2.6" />
+          <title>{`${data[i].label}: ${intfmt(vals[i])}`}</title>
         </g>
-      ))}
+      ) : null))}
+      <g>
+        <circle className="dsh_usage_lineDotHalo" cx={pts[lastIdx].x} cy={pts[lastIdx].y} r="12" />
+        <circle className="dsh_usage_lineDot dsh_usage_lineDotLast" cx={pts[lastIdx].x} cy={pts[lastIdx].y} r="4.5" />
+        <title>{`${data[lastIdx].label}: ${intfmt(vals[lastIdx])}`}</title>
+      </g>
       {data.map((d, i) => (
         <text key={d.label} className="dsh_usage_trendLabel" x={px(i)} y={chartH - 8} textAnchor="middle">{d.label}</text>
       ))}
@@ -296,6 +329,34 @@ function Hero(props: { total: number; cacheHitRate: number | null; sessions: num
   )
 }
 
+/** Animated ranking of the top sessions by token usage (replaces the flat table). */
+function SessionRanking(props: { rows: UsageDashboard['rows']; t: (k: UsageDashboardKey) => string }): JSX.Element {
+  const { rows, t } = props
+  const top = rows.slice(0, 8)
+  const maxTot = Math.max(1, ...top.map((r) => r.tokens.uncachedInputTokens + r.tokens.cacheReadTokens + r.tokens.cacheWriteTokens + r.tokens.outputTokens))
+  return (
+    <div className="dsh_usage_rankCard dsh_usage_in" style={{ animationDelay: '220ms' }}>
+      <div className="dsh_usage_chartTitle">{t('topSessions')}</div>
+      {top.length === 0 ? <div className="dsh_usage_empty">{t('noData')}</div> : top.map((r, i) => {
+        const tot = r.tokens.uncachedInputTokens + r.tokens.cacheReadTokens + r.tokens.cacheWriteTokens + r.tokens.outputTokens
+        const w = (tot / maxTot) * 100
+        const meta = r.origin === 'subagent' ? 'subagent' : (r.running ? t('running') : t('finished'))
+        return (
+          <div className="dsh_usage_rankRow" key={r.sessionId}>
+            <span className="dsh_usage_rankIdx">{i + 1}</span>
+            <span className={r.running ? 'dsh_usage_rankDot dsh_usage_rankDotLive' : 'dsh_usage_rankDot'} />
+            <div className="dsh_usage_rankBody">
+              <div className="dsh_usage_rankTitle" title={r.cwd ?? ''}>{r.title}</div>
+              <div className="dsh_usage_rankBar"><span style={{ width: `${w}%` }} /></div>
+            </div>
+            <span className="dsh_usage_rankVal">{unit(tot)}<span className="dsh_usage_rankMeta">{meta}</span></span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * The dashboard body shared by both the settings-pane and full-screen views.
  */
@@ -319,9 +380,6 @@ function DashboardBody(props: {
   const donutSegments = SERIES
     .map((sr) => ({ key: sr.key, value: d.totals[sr.key === 'uncached' ? 'uncachedInput' : sr.key], color: sr.color, label: sr.label }))
     .filter((s) => s.value > 0)
-
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const toggle = (id: string): void => setExpanded((cur) => (cur === id ? null : id))
 
   return (
     <>
@@ -362,48 +420,7 @@ function DashboardBody(props: {
         <LineTrend data={data} />
       </div>
 
-      <div className="dsh_usage_tableWrap dsh_usage_in" style={{ animationDelay: '220ms' }}>
-        <table className="dsh_usage_table">
-          <thead>
-            <tr>
-              <th className="dsh_usage_expandCol">{''}</th>
-              <th>{t('sessionTitle')}</th>
-              <th className="dsh_usage_num">{t('colTokens')}</th>
-              <th className="dsh_usage_num">{t('colCache')}</th>
-              <th className="dsh_usage_num">{t('colTurns')}</th>
-              <th className="dsh_usage_num">{t('colSteps')}</th>
-              <th className="dsh_usage_num">{t('colLlm')}</th>
-              <th>{''}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {d.rows.map((r) => {
-              const tot = r.tokens.uncachedInputTokens + r.tokens.cacheReadTokens + r.tokens.cacheWriteTokens + r.tokens.outputTokens
-              const inTotal = r.tokens.uncachedInputTokens + r.tokens.cacheReadTokens
-              const hitRate = inTotal > 0 ? (r.tokens.cacheReadTokens / inTotal * 100).toFixed(0) : '—'
-              const open = expanded === r.sessionId
-              return (
-                <FragmentedRow key={r.sessionId}>
-                  <tr className={`dsh_usage_row ${open ? 'dsh_usage_rowOpen' : ''}`} onClick={() => { toggle(r.sessionId) }}>
-                    <td className="dsh_usage_expandCol"><span className="dsh_usage_expandIcon">{open ? '−' : '+'}</span></td>
-                    <td className="dsh_usage_titleCell">
-                      <span className="dsh_usage_sessTitle" title={r.cwd ?? ''}>{r.title}</span>
-                      <span className="dsh_usage_sessMeta">{r.origin === 'subagent' ? 'subagent' : r.cwd ?? ''}</span>
-                    </td>
-                    <td className="dsh_usage_num">{unit(tot)}</td>
-                    <td className="dsh_usage_num">{hitRate}%</td>
-                    <td className="dsh_usage_num">{r.stats.turns}</td>
-                    <td className="dsh_usage_num">{r.stats.steps}</td>
-                    <td className="dsh_usage_num">{msfmt(r.stats.llmMs)}</td>
-                    <td className="dsh_usage_status">{r.running ? t('running') : t('finished')}</td>
-                  </tr>
-                  {open ? <DetailRow r={r} t={t} /> : null}
-                </FragmentedRow>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <SessionRanking rows={d.rows} t={t} />
     </>
   )
 }

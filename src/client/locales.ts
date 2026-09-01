@@ -58,6 +58,7 @@ export type UsageDashboardKey =
   | 'totalTokensTitle'
   | 'composition'
   | 'trend'
+  | 'topSessions'
 
 export const zh = {
   nav: '用量统计',
@@ -112,6 +113,7 @@ export const zh = {
   totalTokensTitle: '总 Token',
   composition: 'Token 类型占比',
   trend: '用量趋势',
+  topSessions: 'Top 会话 Token 排行',
 }
 
 export const en = {
@@ -167,6 +169,7 @@ export const en = {
   totalTokensTitle: 'Total tokens',
   composition: 'Token composition',
   trend: 'Usage trend',
+  topSessions: 'Top sessions by tokens',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
