@@ -56,6 +56,25 @@ function msfmt(ms: number): string {
   return Math.floor(h) + 'h ' + Math.round(m % 60) + 'm'
 }
 
+/** Animate a number from 0 to `target` (ease-out cubic) for the hero counter. */
+function useCountUp(target: number, duration = 750): number {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    if (!Number.isFinite(target) || target <= 0) { setV(0); return }
+    let raf = 0
+    const t0 = Date.now()
+    const tick = (): void => {
+      const p = Math.min(1, (Date.now() - t0) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setV(target * eased)
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return v
+}
+
 /** One summary card. */
 function Card(props: { label: string; value: string; sub?: string }): JSX.Element {
   return (
@@ -260,6 +279,23 @@ function FragmentedRow(props: { children: React.ReactNode }): JSX.Element {
   return <>{props.children}</>
 }
 
+/** The gradient hero banner: a strong visual center holding the headline metric. */
+function Hero(props: { total: number; cacheHitRate: number | null; sessions: number; t: (k: UsageDashboardKey) => string }): JSX.Element {
+  const { total, cacheHitRate, sessions, t } = props
+  const animated = useCountUp(total)
+  const hit = cacheHitRate === null ? '—' : (cacheHitRate * 100).toFixed(1) + '%'
+  return (
+    <div className="dsh_usage_hero dsh_usage_in">
+      <div className="dsh_usage_heroLabel">{t('totalTokens')}</div>
+      <div className="dsh_usage_heroValue">{unit(animated)}</div>
+      <div className="dsh_usage_heroRow">
+        <div className="dsh_usage_heroStat"><span className="dsh_usage_heroStatLabel">{t('cacheHit')}</span><span className="dsh_usage_heroStatValue">{hit}</span></div>
+        <div className="dsh_usage_heroStat"><span className="dsh_usage_heroStatLabel">{t('sessions')}</span><span className="dsh_usage_heroStatValue">{intfmt(sessions)}</span></div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * The dashboard body shared by both the settings-pane and full-screen views.
  */
@@ -289,7 +325,8 @@ function DashboardBody(props: {
 
   return (
     <>
-      <div className="dsh_usage_cards">
+      <Hero total={d.totals.total} cacheHitRate={d.cacheHitRate} sessions={d.sessionCount} t={t} />
+      <div className="dsh_usage_cards dsh_usage_in" style={{ animationDelay: '60ms' }}>
         <BalanceCard balance={balance} loading={balanceLoading} onRefresh={onRefreshBalance} t={t} />
         <Card label={t('totalTokens')} value={unit(d.totals.total)} sub={intfmt(d.totals.total) + ' ' + t('unit')} />
         <Card label={t('cacheHit')} value={hit} sub={`${unit(d.totals.cacheRead)} · ${t('cacheRead')}`} />
@@ -301,7 +338,7 @@ function DashboardBody(props: {
         <Card label={t('decode')} value={decode} sub={`${unit(d.counts.decodeTokens)} ${t('decodeTokens')}`} />
       </div>
 
-      <div className="dsh_usage_trendCard">
+      <div className="dsh_usage_trendCard dsh_usage_in" style={{ animationDelay: '140ms' }}>
         <div className="dsh_usage_trendHeader">
           <span className="dsh_usage_cardLabel">{t('perSession')}</span>
           <div className="dsh_usage_rangeToggle">
@@ -325,7 +362,7 @@ function DashboardBody(props: {
         <LineTrend data={data} />
       </div>
 
-      <div className="dsh_usage_tableWrap">
+      <div className="dsh_usage_tableWrap dsh_usage_in" style={{ animationDelay: '220ms' }}>
         <table className="dsh_usage_table">
           <thead>
             <tr>
