@@ -54,6 +54,13 @@ export interface UsageDashboard {
   counts: {
     turns: number
     steps: number
+    /**
+     * Steps that actually produced a first-token measurement. This — not
+     * `steps` — is the matched denominator for {@link UsageDashboard.time}'s
+     * `ttftMs`: the harness only records a TTFT for steps that streamed, so
+     * `ttftSteps <= steps` and dividing by `steps` understates the average.
+     */
+    ttftSteps: number
     decodeTokens: number
   }
   /** Per-session rows, sorted desc by total tokens, only sessions with data. */
@@ -66,7 +73,7 @@ export const ZERO_USAGE: UsageDashboard = {
   totals: { uncachedInput: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   cacheHitRate: null,
   time: { llmMs: 0, toolMs: 0, ttftMs: 0, decodeMs: 0 },
-  counts: { turns: 0, steps: 0, decodeTokens: 0 },
+  counts: { turns: 0, steps: 0, ttftSteps: 0, decodeTokens: 0 },
   rows: [],
 }
 
@@ -109,7 +116,7 @@ export interface SessionStoreRow {
 export function aggregate(entries: Readonly<Record<string, SessionStoreRow>>): UsageDashboard {
   const totals = { uncachedInput: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
   const time = { llmMs: 0, toolMs: 0, ttftMs: 0, decodeMs: 0 }
-  const counts = { turns: 0, steps: 0, decodeTokens: 0 }
+  const counts = { turns: 0, steps: 0, ttftSteps: 0, decodeTokens: 0 }
   const rows: SessionUsageRow[] = []
 
   for (const row of Object.values(entries)) {
@@ -122,6 +129,7 @@ export function aggregate(entries: Readonly<Record<string, SessionStoreRow>>): U
     addTokens(totals, tokens)
     counts.turns += stats.turns
     counts.steps += stats.steps
+    counts.ttftSteps += stats.ttftSteps
     counts.decodeTokens += stats.decodeTokens
     time.llmMs += stats.llmMs
     time.toolMs += stats.toolMs
@@ -197,33 +205,68 @@ export interface DailyPoint {
 }
 
 /**
+ * Calendar-day key in the **viewer's local timezone**, as `YYYYMMDD`.
+ *
+ * Deliberately not `toISOString().slice(0, 10)`: that yields the UTC date,
+ * which disagrees with the local date the axis labels are built from for every
+ * timezone with a non-zero offset (in UTC+8, everything between local 00:00 and
+ * 08:00 is attributed to the previous day). Bucketing and labelling must come
+ * from the same clock.
+ * @param ms - epoch milliseconds.
+ * @returns the packed local calendar day, comparable by equality.
+ */
+function localDayKey(ms: number): number {
+  const d = new Date(ms)
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+}
+
+/**
  * Bucket per-session token usage into per-day multi-series over the last `days`
  * days. Uses each session's `updatedAt` as the day key (last activity). Returns
  * one point per day, oldest first, each carrying the four token-type buckets.
+ *
+ * Note on semantics: a session's projection carries its **lifetime** totals, so
+ * a session appears entirely under its last-activity day. This is a
+ * distribution of sessions by last activity, not a per-day consumption series.
  * @param rows - the aggregated session rows.
  * @param days - how many trailing days to cover (e.g. 7 or 30).
+ * @param now - epoch ms treated as "today"; injectable for tests.
  * @returns the daily series, oldest first.
  */
-export function dailySeries(rows: readonly SessionUsageRow[], days: number): DailyPoint[] {
+export function dailySeries(rows: readonly SessionUsageRow[], days: number, now: number = Date.now()): DailyPoint[] {
+  // Walk back with setDate() rather than subtracting 86_400_000: across a DST
+  // transition a "day" is 23 or 25 hours, and fixed-millisecond stepping
+  // duplicates or skips a calendar day.
+  const cursor = new Date(now)
+  cursor.setHours(0, 0, 0, 0)
+  cursor.setDate(cursor.getDate() - (days - 1))
+
+  const buckets = new Map<number, DailyPoint>()
   const points: DailyPoint[] = []
-  const now = Date.now()
-  for (let i = days - 1; i >= 0; i--) {
-    const d0 = new Date(now - i * 86400000)
-    const key = d0.toISOString().slice(0, 10)
-    let uncached = 0
-    let cacheRead = 0
-    let cacheWrite = 0
-    let output = 0
-    for (const r of rows) {
-      if (new Date(r.updatedAt).toISOString().slice(0, 10) === key) {
-        uncached += r.tokens.uncachedInputTokens
-        cacheRead += r.tokens.cacheReadTokens
-        cacheWrite += r.tokens.cacheWriteTokens
-        output += r.tokens.outputTokens
-      }
+  for (let i = 0; i < days; i++) {
+    const point: DailyPoint = {
+      label: `${cursor.getMonth() + 1}/${cursor.getDate()}`,
+      uncached: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      output: 0,
     }
-    points.push({ label: `${d0.getMonth() + 1}/${d0.getDate()}`, uncached, cacheRead, cacheWrite, output })
+    buckets.set(localDayKey(cursor.getTime()), point)
+    points.push(point)
+    cursor.setDate(cursor.getDate() + 1)
   }
+
+  // One pass over the rows instead of days x rows: at 500 sessions over a
+  // 30-day range this is ~150x faster and allocates 500 Dates instead of 15,000.
+  for (const r of rows) {
+    const bucket = buckets.get(localDayKey(r.updatedAt))
+    if (bucket === undefined) continue
+    bucket.uncached += r.tokens.uncachedInputTokens
+    bucket.cacheRead += r.tokens.cacheReadTokens
+    bucket.cacheWrite += r.tokens.cacheWriteTokens
+    bucket.output += r.tokens.outputTokens
+  }
+
   // Trim leading empty days so the chart starts at the first day with data.
   let first = points.findIndex((p) => p.uncached + p.cacheRead + p.cacheWrite + p.output > 0)
   if (first < 0) first = points.length - 1

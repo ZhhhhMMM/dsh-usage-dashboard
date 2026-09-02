@@ -398,7 +398,9 @@ function DashboardBody(props: {
   const hit = d.cacheHitRate === null ? '—' : (d.cacheHitRate * 100).toFixed(1) + '%'
   const llm = msfmt(d.time.llmMs)
   const tool = msfmt(d.time.toolMs)
-  const ttft = d.counts.steps > 0 && d.time.ttftMs > 0 ? msfmt(d.time.ttftMs / Math.max(1, d.counts.steps)) : '—'
+  // Divide by ttftSteps, not steps: only streamed steps record a TTFT, so
+  // steps is the wrong (larger) denominator and understates the average.
+  const ttft = d.counts.ttftSteps > 0 && d.time.ttftMs > 0 ? msfmt(d.time.ttftMs / d.counts.ttftSteps) : '—'
   const decode = d.time.decodeMs > 0 ? msfmt(d.time.decodeMs) : '—'
   const data = dailySeries(d.rows, range)
 

@@ -61,6 +61,7 @@
     "@deepseek-ai/dsh-session-projection": "*",
     "@deepseek-ai/dsh-token-meter": "*",
     "@deepseek-ai/dsh-session-stats": "*",
+    "@deepseek-ai/dsh-invariants": "*",
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
@@ -72,6 +73,7 @@
     "@deepseek-ai/dsh-session-projection": { "optional": true },
     "@deepseek-ai/dsh-token-meter": { "optional": true },
     "@deepseek-ai/dsh-session-stats": { "optional": true },
+    "@deepseek-ai/dsh-invariants": { "optional": true },
     "react": { "optional": true }
   },
   "dependencies": {
@@ -94,6 +96,7 @@
     "esbuild": "^0.25.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "vitest": "^3.2.0"
   }
 }
